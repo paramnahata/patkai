@@ -1,0 +1,1 @@
+import {MetadataRoute} from 'next';export default function manifest():MetadataRoute.Manifest{return{name:'PATKAI',short_name:'PATKAI',start_url:'/app',display:'standalone',background_color:'#f4f6f8',theme_color:'#102a43',description:'NER landslide early warning and citizen safety PWA',icons:[]}}

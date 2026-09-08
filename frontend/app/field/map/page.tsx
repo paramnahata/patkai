@@ -1,0 +1,1 @@
+import MapDemo from '../../../components/MapDemo';export default function Page(){return <main className="safety"><h1 className="title">Field Map</h1><p className="muted">Cached demo region. Designed for offline map package delivery.</p><MapDemo/></main>}

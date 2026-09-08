@@ -1,0 +1,1 @@
+import MobileShell from '../../../components/MobileShell';import MapDemo from '../../../components/MapDemo';export default function Page(){return <MobileShell title="Hazard Map"><p className="muted">Downloaded demo region is available for offline viewing. Production map tiles can be replaced by PMTiles/vector tiles.</p><MapDemo/></MobileShell>}

@@ -1,0 +1,7 @@
+{"type":"FeatureCollection","features":[
+{"type":"Feature","properties":{"name":"Sohra Escarpment","risk":82,"level":"CRITICAL","district":"East Khasi Hills","state":"Meghalaya"},"geometry":{"type":"Point","coordinates":[91.73,25.27]}},
+{"type":"Feature","properties":{"name":"Mawsynram Ridge","risk":68,"level":"HIGH","district":"East Khasi Hills","state":"Meghalaya"},"geometry":{"type":"Point","coordinates":[91.58,25.30]}},
+{"type":"Feature","properties":{"name":"Aizawl South Slope","risk":76,"level":"HIGH","district":"Aizawl","state":"Mizoram"},"geometry":{"type":"Point","coordinates":[92.72,23.70]}},
+{"type":"Feature","properties":{"name":"Gangtok East Slope","risk":63,"level":"HIGH","district":"Gangtok","state":"Sikkim"},"geometry":{"type":"Point","coordinates":[88.62,27.33]}},
+{"type":"Feature","properties":{"name":"Tawang Approach","risk":71,"level":"HIGH","district":"Tawang","state":"Arunachal Pradesh"},"geometry":{"type":"Point","coordinates":[91.87,27.59]}}
+]}

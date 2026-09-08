@@ -1,0 +1,19 @@
+{
+  "dataset": "Synthetic-data validation",
+  "n_records": 10000,
+  "accuracy": 0.9465,
+  "precision": 0.9658914728682171,
+  "recall": 0.9785340314136126,
+  "f1": 0.9721716514954486,
+  "roc_auc": 0.8656428155904596,
+  "confusion_matrix": [
+    [
+      24,
+      66
+    ],
+    [
+      41,
+      1869
+    ]
+  ]
+}
