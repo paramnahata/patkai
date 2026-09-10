@@ -7,7 +7,7 @@ class Settings(BaseSettings):
     database_url: str = "sqlite:///./patkai.db"
     jwt_secret: str = "change-me-in-production"
     jwt_exp_minutes: int = 480
-    cors_origins: str = "http://localhost:3000"
+    cors_origins: str = "http://localhost:3000,https://patkai.vercel.app"
     storage_dir: str = "./storage"
     model_path: str = "../ml/models/landslide_model.joblib"
     weather_api_key: str = ""
@@ -20,4 +20,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
 settings = Settings()
+# Render/Postgres commonly supplies postgresql://. Use psycopg v3 explicitly.
+if settings.database_url.startswith("postgresql://"):
+    settings.database_url = settings.database_url.replace("postgresql://", "postgresql+psycopg://", 1)
 Path(settings.storage_dir).mkdir(parents=True, exist_ok=True)

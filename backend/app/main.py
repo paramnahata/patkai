@@ -22,6 +22,7 @@ from fastapi.responses import StreamingResponse
 
 app=FastAPI(title="PATKAI API",version="1.0.0",description="AI-powered landslide early warning and decision support prototype for NER")
 origins=[x.strip().rstrip('/') for x in settings.cors_origins.split(',') if x.strip()]
+if 'https://patkai.vercel.app' not in origins: origins.append('https://patkai.vercel.app')
 app.add_middleware(CORSMiddleware,allow_origins=origins or ["*"],allow_credentials=True,allow_methods=["*"],allow_headers=["*"])
 Path(settings.storage_dir).mkdir(parents=True,exist_ok=True)
 app.mount("/uploads",StaticFiles(directory=settings.storage_dir),name="uploads")
@@ -34,15 +35,26 @@ def startup():
 @app.get("/health")
 def health(): return {"status":"ok","mode":"demo","data_label":"Synthetic / Demo Data"}
 
+def _scoped_query(query, user, district_field):
+    if user.role in ("ADMIN", "CITIZEN"):
+        return query
+    if getattr(user, "district", None):
+        return query.filter(district_field == user.district)
+    return query.filter(False)
+
 @app.post("/api/v1/auth/login",response_model=TokenResponse)
 def login(req: LoginRequest,db:Session=Depends(get_db)):
     u=db.query(User).filter(User.email==req.email).first()
     if not u or not verify_password(req.password,u.password_hash): raise HTTPException(401,"Invalid credentials")
     return {"access_token":create_token(u),"user":{"id":u.id,"email":u.email,"role":u.role,"district":u.district}}
 
+@app.get("/api/v1/auth/me")
+def me(user=Depends(current_user)):
+    return {"id":user.id,"email":user.email,"role":user.role,"district":user.district}
+
 @app.get("/api/v1/dashboard/summary")
 def summary(db:Session=Depends(get_db),user=Depends(current_user)):
-    zones=db.query(Zone).all(); roads=db.query(Road).all()
+    zones=_scoped_query(db.query(Zone),user,Zone.district).all(); roads=_scoped_query(db.query(Road),user,Road.district).all()
     return {"total_monitored_zones":len(zones),"critical_zones":sum(z.risk_level=="CRITICAL" for z in zones),"high_risk_zones":sum(z.risk_level=="HIGH" for z in zones),"active_incidents":db.query(FieldReport).filter(FieldReport.status!="RESOLVED").count(),"blocked_roads":sum(r.status=="BLOCKED" for r in roads),"people_exposed":sum(z.population_exposure for z in zones),"active_alerts":db.query(Alert).filter(Alert.active==True).count(),"field_teams_deployed":3,"last_updated":datetime.utcnow().isoformat(),"data_label":"Synthetic / Demo Data"}
 
 @app.get("/api/v1/districts")
@@ -51,7 +63,7 @@ def districts(db:Session=Depends(get_db),user=Depends(current_user)):
 
 @app.get("/api/v1/zones")
 def zones(state:str|None=None,district:str|None=None,db:Session=Depends(get_db),user=Depends(current_user)):
-    q=db.query(Zone)
+    q=_scoped_query(db.query(Zone),user,Zone.district)
     if state:q=q.filter(Zone.state==state)
     if district:q=q.filter(Zone.district==district)
     return [{"id":z.id,"name":z.name,"state":z.state,"district":z.district,"lat":z.lat,"lon":z.lon,"risk_score":z.risk_score,"probability":z.probability,"risk_level":z.risk_level,"confidence":z.confidence,"trend":z.trend,"population_exposure":z.population_exposure,"factors":z.factors,"updated_at":z.updated_at.isoformat()} for z in q.all()]
@@ -78,7 +90,7 @@ def demo_scenario(req:DemoScenarioRequest,db:Session=Depends(get_db),user=Depend
 
 @app.get("/api/v1/roads")
 def roads(db:Session=Depends(get_db),user=Depends(current_user)):
-    return [{"id":r.id,"name":r.name,"route_number":r.route_number,"district":r.district,"status":r.status,"risk":r.risk,"last_verified":r.last_verified.isoformat(),"alternative_route":r.alternative_route,"nearby_hospital":r.nearby_hospital,"impact":r.impact,"lat":r.lat,"lon":r.lon} for r in db.query(Road).all()]
+    return [{"id":r.id,"name":r.name,"route_number":r.route_number,"district":r.district,"status":r.status,"risk":r.risk,"last_verified":r.last_verified.isoformat(),"alternative_route":r.alternative_route,"nearby_hospital":r.nearby_hospital,"impact":r.impact,"lat":r.lat,"lon":r.lon} for r in _scoped_query(db.query(Road),user,Road.district).all()]
 
 @app.patch("/api/v1/roads/{road_id}")
 def road_status(road_id:str,req:RoadStatusUpdate,db:Session=Depends(get_db),user=Depends(require_roles("ADMIN","DISTRICT_OFFICER","FIELD_OFFICER"))):
@@ -89,6 +101,7 @@ def road_status(road_id:str,req:RoadStatusUpdate,db:Session=Depends(get_db),user
 @app.get("/api/v1/places")
 def places(kind:str|None=None,lat:float|None=None,lon:float|None=None,db:Session=Depends(get_db),user=Depends(current_user)):
     q=db.query(Place)
+    if user.role not in ("ADMIN","CITIZEN") and user.district: q=q.filter(Place.district==user.district)
     if kind:q=q.filter(Place.kind==kind.upper())
     out=[]
     for p in q.all():
@@ -127,11 +140,12 @@ def create_report(req:ReportCreate,db:Session=Depends(get_db),user=Depends(curre
     if req.captured_at:
         try: captured=datetime.fromisoformat(req.captured_at.replace("Z","+00:00")).replace(tzinfo=None)
         except: pass
-    r=FieldReport(incident_type=req.incident_type,description=req.description,severity=req.severity,lat=req.lat,lon=req.lon,captured_at=captured,idempotency_key=req.idempotency_key,metadata_json=req.metadata,status="PENDING")
+    meta=dict(req.metadata or {}); meta["reported_by_user_id"]=user.id; meta["reported_by_email"]=user.email
+    r=FieldReport(incident_type=req.incident_type,description=req.description,severity=req.severity,lat=req.lat,lon=req.lon,captured_at=captured,idempotency_key=req.idempotency_key,metadata_json=meta,status="PENDING")
     db.add(r); db.commit(); return {"status":"accepted","id":r.id}
 
 @app.post("/api/v1/reports/upload")
-async def upload_report(background:BackgroundTasks,incident_type:str,description:str="",severity:str="MODERATE",lat:float|None=None,lon:float|None=None,idempotency_key:str|None=None,file:UploadFile|None=File(None),db:Session=Depends(get_db),user=Depends(current_user)):
+async def upload_report(background:BackgroundTasks,incident_type:str,description:str="",severity:str="MODERATE",lat:float|None=None,lon:float|None=None,captured_at:str|None=None,idempotency_key:str|None=None,file:UploadFile|None=File(None),db:Session=Depends(get_db),user=Depends(current_user)):
     if idempotency_key and db.query(FieldReport).filter(FieldReport.idempotency_key==idempotency_key).first(): return {"status":"duplicate"}
     meta={}; media_path=None
     if file:
@@ -142,7 +156,12 @@ async def upload_report(background:BackgroundTasks,incident_type:str,description
         previous=db.query(FieldReport).order_by(desc(FieldReport.created_at)).limit(200).all()
         existing_hashes=[r.metadata_json or {} for r in previous]
         meta=analyze_image(str(path),lat,lon,datetime.utcnow(),existing_hashes)
-    r=FieldReport(incident_type=incident_type,description=description,severity=severity,lat=lat,lon=lon,idempotency_key=idempotency_key,metadata_json=meta,media_path=media_path,trust_score=meta.get("trust_score",50),verification_status=meta.get("verification_status","NEEDS VERIFICATION"))
+    meta["reported_by_user_id"]=user.id; meta["reported_by_email"]=user.email
+    captured=None
+    if captured_at:
+        try: captured=datetime.fromisoformat(captured_at.replace("Z","+00:00")).replace(tzinfo=None)
+        except: pass
+    r=FieldReport(incident_type=incident_type,description=description,severity=severity,lat=lat,lon=lon,captured_at=captured,idempotency_key=idempotency_key,metadata_json=meta,media_path=media_path,trust_score=meta.get("trust_score",50),verification_status=meta.get("verification_status","NEEDS VERIFICATION"))
     db.add(r); db.commit(); return {"status":"accepted","id":r.id,"trust_score":r.trust_score,"verification_status":r.verification_status,"metadata":meta}
 
 @app.get("/api/v1/reports/{report_id}/export.pdf")
@@ -153,7 +172,9 @@ def export_report(report_id:str,db:Session=Depends(get_db),user=Depends(require_
 
 @app.get("/api/v1/reports")
 def reports(db:Session=Depends(get_db),user=Depends(current_user)):
-    return [{"id":r.id,"incident_type":r.incident_type,"description":r.description,"severity":r.severity,"lat":r.lat,"lon":r.lon,"status":r.status,"trust_score":r.trust_score,"verification_status":r.verification_status,"metadata":r.metadata_json,"media_url":f"/uploads/{r.media_path}" if r.media_path else None,"created_at":r.created_at.isoformat()} for r in db.query(FieldReport).order_by(desc(FieldReport.created_at)).all()]
+    rows=db.query(FieldReport).order_by(desc(FieldReport.created_at)).all()
+    if user.role=="CITIZEN": rows=[r for r in rows if (r.metadata_json or {}).get("reported_by_user_id")==user.id]
+    return [{"id":r.id,"incident_type":r.incident_type,"description":r.description,"severity":r.severity,"lat":r.lat,"lon":r.lon,"status":r.status,"trust_score":r.trust_score,"verification_status":r.verification_status,"metadata":r.metadata_json,"media_url":f"/uploads/{r.media_path}" if r.media_path else None,"created_at":r.created_at.isoformat()} for r in rows]
 
 @app.patch("/api/v1/reports/{report_id}/verify")
 def verify_report(report_id:str,action:str="verify",db:Session=Depends(get_db),user=Depends(require_roles("ADMIN","DISTRICT_OFFICER"))):
@@ -171,7 +192,8 @@ def sync(payload:list[dict],db:Session=Depends(get_db),user=Depends(current_user
         key=item.get("idempotency_key")
         if key and db.query(FieldReport).filter(FieldReport.idempotency_key==key).first(): results.append({"idempotency_key":key,"status":"duplicate"}); continue
         try:
-            r=FieldReport(incident_type=item.get("incident_type","Other"),description=item.get("description",""),severity=item.get("severity","MODERATE"),lat=item.get("lat"),lon=item.get("lon"),idempotency_key=key,status="PENDING",metadata_json=item.get("metadata",{})); db.add(r); results.append({"idempotency_key":key,"status":"accepted","id":r.id})
+            meta=dict(item.get("metadata",{}) or {}); meta["reported_by_user_id"]=user.id; meta["reported_by_email"]=user.email
+            r=FieldReport(incident_type=item.get("incident_type","Other"),description=item.get("description",""),severity=item.get("severity","MODERATE"),lat=item.get("lat"),lon=item.get("lon"),idempotency_key=key,status="PENDING",metadata_json=meta); db.add(r); results.append({"idempotency_key":key,"status":"accepted","id":r.id})
         except Exception: results.append({"idempotency_key":key,"status":"rejected"})
     db.commit(); return {"results":results}
 

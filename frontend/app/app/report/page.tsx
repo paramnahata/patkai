@@ -1,5 +1,5 @@
 'use client';
-import {useState} from 'react';import exifr from 'exifr';import MobileShell from '../../../components/MobileShell';import {api} from '../../../lib/api';import {queueReport} from '../../../lib/offline';
+import {useState} from 'react';import exifr from 'exifr';import MobileShell from '../../../components/MobileShell';import {api,API,getToken} from '../../../lib/api';import {queueReport} from '../../../lib/offline';
 
 type Check={label:string,status:'good'|'warn'|'bad',detail:string};
 export default function Page(){
@@ -14,7 +14,7 @@ export default function Page(){
    const key=crypto.randomUUID();const capturedAt=new Date().toISOString();
    try{
     if(navigator.onLine){
-      if(file){const fd=new FormData();fd.append('incident_type',type);fd.append('description',desc);fd.append('severity',sev);if(lat!==undefined)fd.append('lat',String(lat));if(lon!==undefined)fd.append('lon',String(lon));fd.append('idempotency_key',key);fd.append('file',file);const x=await fetch(`${process.env.NEXT_PUBLIC_API_URL||'http://localhost:8000'}/api/v1/reports/upload`,{method:'POST',headers:{Authorization:`Bearer ${localStorage.getItem('patkai_token')||''}`},body:fd});const j=await x.json();if(!x.ok)throw new Error(j.detail||'Upload failed');setMsg(`Report accepted · Trust ${j.trust_score}/100 · ${j.verification_status}. Government verification remains the final decision.`)}
+      if(file){const fd=new FormData();fd.append('incident_type',type);fd.append('description',desc);fd.append('severity',sev);if(lat!==undefined)fd.append('lat',String(lat));if(lon!==undefined)fd.append('lon',String(lon));fd.append('idempotency_key',key);fd.append('file',file);const x=await fetch(`${API}/api/v1/reports/upload`,{method:'POST',headers:{Authorization:`Bearer ${getToken('citizen')}`},body:fd});const j=await x.json();if(!x.ok)throw new Error(j.detail||'Upload failed');setMsg(`Report accepted · Trust ${j.trust_score}/100 · ${j.verification_status}. Government verification remains the final decision.`)}
       else {const x=await api('/api/v1/reports',{method:'POST',body:JSON.stringify({incident_type:type,description:desc,severity:sev,lat,lon,captured_at:capturedAt,idempotency_key:key,metadata:{client_timestamp:capturedAt}})});setMsg(`Report accepted · ID ${String(x.id||'').slice(0,8)}`)}
     }else{await queueReport({incident_type:type,description:desc,severity:sev,lat,lon,captured_at:capturedAt,idempotency_key:key,metadata:{queued_offline:true},fileBlob:file});setMsg('OFFLINE: report saved on this phone and will sync when the connection returns.')}
    }catch(e:any){setMsg(e.message||'Unable to submit report. Please try again.')}finally{setBusy(false)}

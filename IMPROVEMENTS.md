@@ -31,3 +31,13 @@
 ## Deployment
 - No Docker installation is required on the developer machine for Render deployment.
 - The existing Vercel/Render deployment structure is retained.
+
+## Stability fixes in this revision
+- Fixed citizen/government session collision by using separate role-scoped browser sessions.
+- Added visible signed-in account and Log out controls.
+- Fixed map data loading race caused by API requests firing before the citizen session existed.
+- Kept a real OpenStreetMap basemap and added visible risk halos plus road/service/report overlays.
+- Added stronger CORS defaults for the Vercel production frontend and explicit psycopg URL normalization.
+- Fixed service-worker response cloning/cache race (`Response body is already used`).
+- Fixed offline report upload compatibility with `captured_at` and citizen-scoped authorization.
+- Citizen reports are now associated with the signed-in citizen and the My Reports view only exposes that user's reports.
