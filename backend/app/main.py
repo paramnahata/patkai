@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
 from sqlalchemy import desc
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 import uuid, json
 from .config import settings
@@ -21,7 +21,7 @@ from .services.report_export import incident_pdf
 from fastapi.responses import StreamingResponse
 
 app=FastAPI(title="PATKAI API",version="1.0.0",description="AI-powered landslide early warning and decision support prototype for NER")
-origins=[x.strip() for x in settings.cors_origins.split(",") if x.strip()]
+origins=[x.strip().rstrip('/') for x in settings.cors_origins.split(',') if x.strip()]
 app.add_middleware(CORSMiddleware,allow_origins=origins or ["*"],allow_credentials=True,allow_methods=["*"],allow_headers=["*"])
 Path(settings.storage_dir).mkdir(parents=True,exist_ok=True)
 app.mount("/uploads",StaticFiles(directory=settings.storage_dir),name="uploads")
@@ -100,6 +100,17 @@ def places(kind:str|None=None,lat:float|None=None,lon:float|None=None,db:Session
 def weather(lat:float=25.27,lon:float=91.73,user=Depends(current_user)): return DemoWeatherProvider().current(lat,lon)
 @app.get("/api/v1/satellite")
 def satellite(lat:float=25.27,lon:float=91.73,user=Depends(current_user)): return DemoSatelliteProvider().current(lat,lon)
+@app.get("/api/v1/data-sources")
+def data_sources(db:Session=Depends(get_db),user=Depends(current_user)):
+    latest_report=db.query(FieldReport).order_by(desc(FieldReport.created_at)).first()
+    return [
+      {"id":"weather","name":"Weather / Rainfall","source":"Configured weather provider","status":"DEMO FEED","freshness":"Current session","used_for":["rainfall","humidity","forecast"]},
+      {"id":"terrain","name":"Terrain & Slope","source":"GIS / DEM layer","status":"AVAILABLE","freshness":"Static reference layer","used_for":["slope","terrain ruggedness","elevation"]},
+      {"id":"satellite","name":"Satellite Indicators","source":"Satellite observation adapter","status":"DEMO FEED","freshness":"Current session","used_for":["surface change","land cover","NDVI/change"]},
+      {"id":"historical","name":"Historical Landslide Inventory","source":"Historical incident dataset","status":"AVAILABLE","freshness":"Reference dataset","used_for":["historical frequency","calibration"]},
+      {"id":"reports","name":"Citizen & Field Reports","source":"PATKAI reporting channel","status":"ACTIVE","freshness":latest_report.created_at.isoformat() if latest_report else "No reports yet","used_for":["field verification","incident evidence","risk context"]}
+    ]
+
 @app.get("/api/v1/sensors")
 def sensors(db:Session=Depends(get_db),user=Depends(current_user)):
     return [{"id":s.id,"sensor_type":s.sensor_type,"name":s.name,"lat":s.lat,"lon":s.lon,"value":s.value,"battery":s.battery,"status":s.status,"timestamp":s.timestamp.isoformat()} for s in db.query(Sensor).all()]
@@ -128,7 +139,9 @@ async def upload_report(background:BackgroundTasks,incident_type:str,description
         content=await file.read()
         if len(content)>8*1024*1024: raise HTTPException(413,"Image exceeds 8 MB limit")
         name=f"{uuid.uuid4()}_{Path(file.filename or 'report.jpg').name}"; path=Path(settings.storage_dir)/name; path.write_bytes(content); media_path=name
-        meta=analyze_image(str(path),lat,lon)
+        previous=db.query(FieldReport).order_by(desc(FieldReport.created_at)).limit(200).all()
+        existing_hashes=[r.metadata_json or {} for r in previous]
+        meta=analyze_image(str(path),lat,lon,datetime.utcnow(),existing_hashes)
     r=FieldReport(incident_type=incident_type,description=description,severity=severity,lat=lat,lon=lon,idempotency_key=idempotency_key,metadata_json=meta,media_path=media_path,trust_score=meta.get("trust_score",50),verification_status=meta.get("verification_status","NEEDS VERIFICATION"))
     db.add(r); db.commit(); return {"status":"accepted","id":r.id,"trust_score":r.trust_score,"verification_status":r.verification_status,"metadata":meta}
 

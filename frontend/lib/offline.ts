@@ -1,5 +1,7 @@
 import {openDB} from 'idb';
 const DB='patkai-offline';const STORE='reports';
-export async function queueReport(report:any){const db=await openDB(DB,1,{upgrade(db){if(!db.objectStoreNames.contains(STORE))db.createObjectStore(STORE,{keyPath:'idempotency_key'})}});await db.put(STORE,report)}
-export async function getQueuedReports(){const db=await openDB(DB,1,{upgrade(db){if(!db.objectStoreNames.contains(STORE))db.createObjectStore(STORE,{keyPath:'idempotency_key'})}});return db.getAll(STORE)}
-export async function clearQueued(keys:string[]){const db=await openDB(DB,1,{upgrade(db){if(!db.objectStoreNames.contains(STORE))db.createObjectStore(STORE,{keyPath:'idempotency_key'})}});const tx=db.transaction(STORE,'readwrite');for(const k of keys)await tx.store.delete(k);await tx.done}
+async function db(){return openDB(DB,1,{upgrade(db){if(!db.objectStoreNames.contains(STORE))db.createObjectStore(STORE,{keyPath:'idempotency_key'})}})}
+export async function queueReport(report:any){const d=await db();await d.put(STORE,report)}
+export async function getQueuedReports(){const d=await db();return d.getAll(STORE)}
+export async function clearQueued(keys:string[]){const d=await db();const tx=d.transaction(STORE,'readwrite');for(const k of keys)await tx.store.delete(k);await tx.done}
+export async function syncQueuedReports(){if(!navigator.onLine)return {synced:0};const rows=await getQueuedReports();let synced=0;for(const r of rows){try{const fd=new FormData();fd.append('incident_type',r.incident_type);fd.append('description',r.description||'');fd.append('severity',r.severity||'MODERATE');if(r.lat!=null)fd.append('lat',String(r.lat));if(r.lon!=null)fd.append('lon',String(r.lon));if(r.captured_at)fd.append('captured_at',r.captured_at);fd.append('idempotency_key',r.idempotency_key);if(r.fileBlob)fd.append('file',r.fileBlob,'offline-report.jpg');const res=await fetch(`${process.env.NEXT_PUBLIC_API_URL||'http://localhost:8000'}/api/v1/reports/upload`,{method:'POST',headers:{Authorization:`Bearer ${localStorage.getItem('patkai_token')||''}`},body:fd});if(res.ok){await clearQueued([r.idempotency_key]);synced++}}catch{break}}return {synced}}
