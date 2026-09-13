@@ -63,7 +63,7 @@ PATKAI presents risk using operational levels such as **Low, Moderate/Watch, Hig
 
 ## GIS & Mapping
 
-The deployed prototype uses **OpenStreetMap tiles with MapLibre GL JS**, with a built-in offline/demo GIS fallback so the map remains usable even if a public tile service is temporarily unavailable. PATKAI overlays its demo/processed datasets on top of that map, including: 
+The deployed prototype uses **MapLibre GL JS with a keyless OpenStreetMap raster basemap** by default, so the map remains visible without a paid map account or browser API key. If a MapTiler key is configured, the frontend can use MapTiler automatically. PATKAI overlays its demo/processed datasets on top of that map, including: 
 
 - Landslide-risk locations
 - Risk halos and severity levels
@@ -72,7 +72,7 @@ The deployed prototype uses **OpenStreetMap tiles with MapLibre GL JS**, with a 
 - Citizen/field reports
 - NER-wide geographic context
 
-No map API key is required for the prototype. The browser uses a keyless OpenStreetMap basemap and can fall back to the bundled PATKAI GIS view when external tiles cannot be reached. This keeps the core demonstration independent of a paid map-provider key.
+A MapTiler key is optional. The recommended SIH demonstration configuration is keyless OpenStreetMap + MapLibre, which removes an external-key dependency. If MapTiler is enabled, the frontend reads `NEXT_PUBLIC_MAPTILER_KEY` from Vercel and the key should be restricted by allowed HTTP origins. No key is committed to source control.
 
 ## Data Sources & Hardware Positioning
 
@@ -88,7 +88,7 @@ For the prototype, seeded environmental and incident values are explicitly marke
 | Government dashboard | Next.js, React, TypeScript |
 | Backend | FastAPI, Python |
 | Database | PostgreSQL / Supabase-compatible PostgreSQL |
-| GIS | OpenStreetMap + MapLibre GL JS + offline GIS fallback |
+| GIS | OpenStreetMap + MapLibre GL JS (optional MapTiler provider) |
 | AI/ML | Python risk/ML pipeline |
 | Authentication | JWT + role-based access control |
 | Offline | Service Worker + IndexedDB |
@@ -164,6 +164,8 @@ The offline layer is designed to reduce dependence on continuous connectivity wh
 - **Vercel:** https://vercel.com/
 - **Render:** https://render.com/
 - **Supabase:** https://supabase.com/
+- **MapTiler Cloud (optional):** https://cloud.maptiler.com/
+- **OpenStreetMap:** https://www.openstreetmap.org/
 
 ## Demo Accounts
 
@@ -177,21 +179,24 @@ The prototype includes demo identities for demonstration purposes.
 
 These accounts and all seeded environmental/incident observations are for prototype demonstration only.
 
-## Deployment Configuration
+## Deployment & Demonstration Configuration
 
 ### Vercel — Frontend
 
-The Vercel project serves the `frontend` application. The only required frontend environment variable is:
+The deployed frontend is hosted on Vercel and connects to the FastAPI service on Render. The map works without any map API key by using OpenStreetMap tiles through MapLibre. Therefore, `NEXT_PUBLIC_MAPTILER_KEY` is **optional**.
+
+Recommended Vercel variables:
 
 ```text
 NEXT_PUBLIC_API_URL=https://patkai.onrender.com
+NEXT_PUBLIC_MAPTILER_KEY=<optional MapTiler key>
 ```
 
-No map API key is required. The map uses OpenStreetMap with a bundled offline/demo GIS fallback.
+The frontend also contains a keyless synthetic-data fallback for the operational map. This is intentional for the SIH prototype: the GIS interface remains demonstrable even if an external provider or authenticated API session is temporarily unavailable.
 
 ### Render — Backend
 
-The Render service should use the `backend` directory/Dockerfile. Backend environment variables remain on Render, for example:
+The FastAPI service is deployed on Render. Typical backend configuration is:
 
 ```text
 DATABASE_URL=<Supabase or Render PostgreSQL connection string>
@@ -201,7 +206,15 @@ STORAGE_DIR=./storage
 MODEL_PATH=../ml/models/landslide_model.joblib
 ```
 
-The map key is **not required on Render**. The browser loads the keyless OpenStreetMap basemap directly and can use the bundled offline/demo GIS fallback.
+The backend does not need the map key. Authentication, role-based access, database operations, risk processing and report workflows remain server-side.
+
+### Supabase — Data Layer
+
+Supabase can provide the PostgreSQL database used by the Render backend. It is also suitable for a production extension with managed storage and additional data services.
+
+### Prototype data policy
+
+The map, risk scores, rainfall-linked values and incident observations shown in the current demonstration are synthetic/demo observations unless an authoritative source is explicitly identified. This keeps the prototype honest while demonstrating the complete operational workflow requested by the SIH problem statement.
 
 ## Prototype Data Honesty
 
@@ -221,11 +234,25 @@ The solution directly addresses the stated requirements by combining:
 - Offline/low-network operation for remote communities
 - Multilingual-ready communication architecture
 
+## SIH Judge Demonstration Flow
+
+The intended demonstration can be understood as one continuous disaster-management workflow:
+
+1. **Citizen / field observation** — a hazard can be reported with location and media.
+2. **Risk assessment** — environmental, terrain, historical and incident signals contribute to a risk score.
+3. **GIS situational awareness** — authorities see risk zones, road connectivity, shelters/services and reports together on the NER map.
+4. **Decision support** — population exposure, infrastructure criticality and connectivity help prioritize action.
+5. **Alert & response** — alerts, reports, road status and response workflows support district-level action.
+6. **Low-connectivity operation** — cached application assets and queued reports reduce dependence on continuous connectivity.
+
+This directly maps to the SIH requirements for predictive risk identification, GIS visualization, geo-tagged field reporting, alerts, road/infrastructure monitoring and remote-region usability.
+
 ## Important Limitation
 
 PATKAI is a prototype decision-support system. Risk scores shown in the demonstration are synthetic/demo values unless an external source and timestamp are explicitly displayed. A production disaster-warning service would require authoritative data agreements, validation, monitoring, security review, model evaluation, false-alarm analysis and formal governance before operational use.
 
 ## References
 
-- OpenStreetMap tile usage: https://operations.osmfoundation.org/policies/tiles/
+- MapTiler MapLibre integration: https://docs.maptiler.com/react/maplibre-gl-js/get-started/
+- MapTiler API-key security: https://docs.maptiler.com/cloud/api/authentication-key/
 - MapLibre GL JS: https://maplibre.org/maplibre-gl-js/docs/
