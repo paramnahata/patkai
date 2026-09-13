@@ -72,7 +72,6 @@ export default function MapDemo({mode='gov'}:Props){
     minZoom:4,
     maxZoom:18,
     attributionControl:false,
-    failIfMajorPerformanceCaveat:false
    });
   map.current=m;m.addControl(new maplibregl.NavigationControl(),'top-right');m.addControl(new maplibregl.ScaleControl({unit:'metric'}),'bottom-left');m.addControl(new maplibregl.AttributionControl({compact:true}),'bottom-right');
   const onLoad=()=>{setMapReady(true);setMapError('');
