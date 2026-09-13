@@ -54,7 +54,7 @@ App       Control Room    Response
    └─────────┼──────────────┘
              ▼
       GIS / Map Layer
-       MapTiler + MapLibre
+       OpenStreetMap + MapLibre
 ```
 
 ## Risk & Decision Support
@@ -63,7 +63,7 @@ PATKAI presents risk using operational levels such as **Low, Moderate/Watch, Hig
 
 ## GIS & Mapping
 
-The deployed prototype uses **MapTiler with MapLibre GL JS** for the real geographic basemap. PATKAI overlays its demo/processed datasets on top of that map, including: 
+The deployed prototype uses **OpenStreetMap tiles with MapLibre GL JS**, with a built-in offline/demo GIS fallback so the map remains usable even if a public tile service is temporarily unavailable. PATKAI overlays its demo/processed datasets on top of that map, including: 
 
 - Landslide-risk locations
 - Risk halos and severity levels
@@ -72,7 +72,7 @@ The deployed prototype uses **MapTiler with MapLibre GL JS** for the real geogra
 - Citizen/field reports
 - NER-wide geographic context
 
-MapTiler documentation recommends protecting browser API keys with allowed HTTP origins. The PATKAI frontend therefore reads the key from the Vercel environment variable `NEXT_PUBLIC_MAPTILER_KEY` rather than storing the secret in source control.
+No map API key is required for the prototype. The browser uses a keyless OpenStreetMap basemap and can fall back to the bundled PATKAI GIS view when external tiles cannot be reached. This keeps the core demonstration independent of a paid map-provider key.
 
 ## Data Sources & Hardware Positioning
 
@@ -88,7 +88,7 @@ For the prototype, seeded environmental and incident values are explicitly marke
 | Government dashboard | Next.js, React, TypeScript |
 | Backend | FastAPI, Python |
 | Database | PostgreSQL / Supabase-compatible PostgreSQL |
-| GIS | MapTiler + MapLibre GL JS |
+| GIS | OpenStreetMap + MapLibre GL JS + offline GIS fallback |
 | AI/ML | Python risk/ML pipeline |
 | Authentication | JWT + role-based access control |
 | Offline | Service Worker + IndexedDB |
@@ -164,7 +164,6 @@ The offline layer is designed to reduce dependence on continuous connectivity wh
 - **Vercel:** https://vercel.com/
 - **Render:** https://render.com/
 - **Supabase:** https://supabase.com/
-- **MapTiler Cloud:** https://cloud.maptiler.com/
 
 ## Demo Accounts
 
@@ -182,14 +181,13 @@ These accounts and all seeded environmental/incident observations are for protot
 
 ### Vercel — Frontend
 
-The Vercel project should use the `frontend` directory. Add these environment variables in **Vercel → Project → Settings → Environment Variables**:
+The Vercel project serves the `frontend` application. The only required frontend environment variable is:
 
 ```text
 NEXT_PUBLIC_API_URL=https://patkai.onrender.com
-NEXT_PUBLIC_MAPTILER_KEY=<your MapTiler API key>
 ```
 
-`NEXT_PUBLIC_MAPTILER_KEY` is intentionally public because it is used by the browser map. Restrict the MapTiler key by allowed HTTP origins in MapTiler Cloud. Do not commit the real key to GitHub.
+No map API key is required. The map uses OpenStreetMap with a bundled offline/demo GIS fallback.
 
 ### Render — Backend
 
@@ -203,7 +201,7 @@ STORAGE_DIR=./storage
 MODEL_PATH=../ml/models/landslide_model.joblib
 ```
 
-The MapTiler key is **not required on Render** because the browser loads the MapTiler basemap from the Vercel frontend.
+The map key is **not required on Render**. The browser loads the keyless OpenStreetMap basemap directly and can use the bundled offline/demo GIS fallback.
 
 ## Prototype Data Honesty
 
@@ -229,6 +227,5 @@ PATKAI is a prototype decision-support system. Risk scores shown in the demonstr
 
 ## References
 
-- MapTiler MapLibre integration: https://docs.maptiler.com/react/maplibre-gl-js/get-started/
-- MapTiler API-key security: https://docs.maptiler.com/cloud/api/authentication-key/
+- OpenStreetMap tile usage: https://operations.osmfoundation.org/policies/tiles/
 - MapLibre GL JS: https://maplibre.org/maplibre-gl-js/docs/
