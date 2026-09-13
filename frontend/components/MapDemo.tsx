@@ -34,6 +34,20 @@ const DEMO_PLACES:any[]=[
 
 const OSM_STYLE:any={version:8,sources:{osm:{type:'raster',tiles:['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],tileSize:256,maxzoom:19,attribution:'© OpenStreetMap contributors'}},layers:[{id:'osm',type:'raster',source:'osm',paint:{'raster-opacity':1}}]};
 
+// FIX: maplibre-gl v5 removed the old `maplibregl.supported()` helper (it doesn't
+// exist on this version, at runtime or in its types — that's what broke the
+// Vercel build). This does the same job by hand: try to actually get a WebGL
+// context. This is what tells apart "tiles fetch fine but never paint" caused by
+// Brave Shields / disabled hardware acceleration from other causes.
+function isWebglAvailable():boolean{
+ try{
+  const c=document.createElement('canvas');
+  return !!(window.WebGLRenderingContext&&(c.getContext('webgl2')||c.getContext('webgl')||c.getContext('experimental-webgl')));
+ }catch{
+  return false;
+ }
+}
+
 export default function MapDemo({mode='gov'}:Props){
  const ref=useRef<HTMLDivElement>(null);
  const map=useRef<maplibregl.Map|null>(null);
@@ -74,7 +88,7 @@ export default function MapDemo({mode='gov'}:Props){
   // usable in this tab (Brave's aggressive fingerprinting protection, disabled
   // hardware acceleration, and some corporate GPU blocklists all make tiles
   // download fine over the network while the canvas never paints anything).
-  if(!maplibregl.supported()){
+  if(!isWebglAvailable()){
    setMapError('This browser tab is blocking WebGL, so the map canvas cannot render. In Brave, turn Shields off (or set "Block fingerprinting" to Standard) for this site, or try a different browser, then reload.');
    return;
   }
